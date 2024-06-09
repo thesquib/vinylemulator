@@ -2,10 +2,46 @@ import time
 import nfc
 import requests
 import uuid
-import appsettings #you shouldnt need to edit this file
+import appsettings  #you shouldnt need to edit this file
 import usersettings #this is the file you might need to edit
 import sys
 
+import soco
+from soco.plugins.sharelink import ShareLinkPlugin
+device = soco.discover().pop()
+share_link = ShareLinkPlugin(device)
+spotify_urls = {
+    "track": "https://open.spotify.com/track/",
+    "playlist": "https://open.spotify.com/playlist/",
+    "album": "https://open.spotify.com/album/"
+}
+
+def getSpotifyURLFromURI(URI):
+    uricomponents = URI.split(":")
+    url = None
+    value = None
+    if len(uricomponents) == 3:
+        # must be album, artist, or playlist
+        if uricomponents[1] == "track":
+            url = spotify_urls["track"]
+            value = uricomponents[2]
+        elif uricomponents[1] == "playlist":
+            url = spotify_urls["playlist"]
+            value = uricomponents[2]
+        elif uricomponents[1] == "album":
+            url = spotify_urls["album"]
+            value = uricomponents[2]
+    elif len(uricomponents) == 5:
+        url = spotify_urls["playlist"]
+        value = uricomponents[4]
+        # must be a user playlist
+
+    if url != None:
+        url = "/" + value +"?="+value
+
+    return url
+
+# device.play_from_queue(index=0)
 # this function gets called when a NFC tag is detected
 def touched(tag):
     global sonosroom_local
@@ -33,7 +69,8 @@ def touched(tag):
             #determine which music service read from NFC
             if receivedtext_lower.startswith ('spotify'):
                 servicetype = "spotify"
-                sonosinstruction = "spotify/now/" + receivedtext
+                sonosinstruction = getSpotifyURLFromURI(receivedtext)
+                print(sonosinstruction)
 
             if receivedtext_lower.startswith ('tunein'):
                 servicetype = "tunein"
@@ -83,7 +120,12 @@ def touched(tag):
             if servicetype.lower() == 'completeurl':
                 urltoget = sonosinstruction
             else:
-                urltoget = usersettings.sonoshttpaddress + "/" + sonosroom_local + "/" + sonosinstruction
+                if servicetype.lower() == 'spotify':
+                    print("Playing a spotify!")
+                    share_link.add_share_link_to_queue(sonosinstruction)
+                    device.play_from_queue(index=0)
+                else:
+                    urltoget = usersettings.sonoshttpaddress + "/" + sonosroom_local + "/" + sonosinstruction
             
             #check Sonos API is responding
             try:
